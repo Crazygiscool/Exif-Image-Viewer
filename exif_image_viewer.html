@@ -1,0 +1,1291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Integrated EXIF Viewer & Editor</title>
+  <script src="https://cdn.jsdelivr.net/npm/exif-js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet/dist/leaflet.css" />
+  <style>
+    /* Core Styles */
+    body {
+      font-family: "Courier New", Courier, monospace;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      background-color: var(--background-color);
+      color: var(--text-color);
+      transition: background-color 0.3s ease;
+    }
+
+    :root {
+      --background-color: #000000;
+      --text-color: #00FF00;
+      --sidebar-bg-color: #001a00;
+      --border-color: #00FF00;
+      --button-bg-color: linear-gradient(135deg, #004d00, #006600);
+      --button-hover-bg-color: linear-gradient(135deg, #006600, #008000);
+      --button-shadow: 0px 4px 6px rgba(0, 0, 0, 0.3);
+      --modal-bg: rgba(0, 26, 0, 0.95);
+    }
+
+    /* Cyberpunk theme */
+    .cyberpunk-theme {
+      --background-color: #120458;
+      --text-color: #00ff9f;
+      --sidebar-bg-color: #1a0163;
+      --border-color: #ff00a0;
+      --button-bg-color: linear-gradient(135deg, #440a67, #7a04eb);
+      --button-hover-bg-color: linear-gradient(135deg, #7a04eb, #ff00a0);
+      --button-shadow: 0 0 20px rgba(255, 0, 160, 0.3);
+      --modal-bg: rgba(18, 4, 88, 0.95);
+    }
+
+    /* Hacker theme */
+    .hacker-theme {
+      --background-color: #0a0a0a;
+      --text-color: #0f0;
+      --sidebar-bg-color: #1a1a1a;
+      --border-color: #0f0;
+      --button-bg-color: linear-gradient(135deg, #1a1a1a, #2a2a2a);
+      --button-hover-bg-color: linear-gradient(135deg, #2a2a2a, #3a3a3a);
+      --button-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+      --modal-bg: rgba(10, 10, 10, 0.95);
+    }
+
+    /* Dracula theme */
+    .dracula-theme {
+      --background-color: #282a36;
+      --text-color: #f8f8f2;
+      --sidebar-bg-color: #21222c;
+      --border-color: #bd93f9;
+      --button-bg-color: linear-gradient(135deg, #44475a, #6272a4);
+      --button-hover-bg-color: linear-gradient(135deg, #6272a4, #bd93f9);
+      --button-shadow: 0 2px 4px rgba(189, 147, 249, 0.3);
+      --modal-bg: rgba(40, 42, 54, 0.95);
+    }
+
+    /* Light theme */
+    .light-theme {
+      --background-color: #f5f5f5;
+      --text-color: #333333;
+      --sidebar-bg-color: #ffffff;
+      --border-color: #cccccc;
+      --button-bg-color: linear-gradient(135deg, #ffffff, #f0f0f0);
+      --button-hover-bg-color: linear-gradient(135deg, #f0f0f0, #e0e0e0);
+      --button-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      --modal-bg: rgba(255, 255, 255, 0.95);
+    }
+
+    /* Add theme transition for smooth changes */
+    .theme-options div {
+      padding: 10px 20px;
+      cursor: pointer;
+      color: var(--text-color);
+      transition: all 0.3s ease;
+      background: var(--button-bg-color);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .theme-options div::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 300%;
+      height: 300%;
+      background: var(--button-hover-bg-color);
+      transition: transform 0.5s ease;
+      transform: translate(-50%, -50%) scale(0);
+      border-radius: 50%;
+    }
+
+    .theme-options div:hover::before {
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    .theme-options div span {
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Update the sidebar styles */
+    #sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100vh;
+      overflow-y: auto;
+      background-color: var(--sidebar-bg-color);
+      border-right: 1px solid var(--border-color);
+      transition: transform 0.3s ease;
+      width: 250px;
+      z-index: 1000;
+    }
+
+    #main {
+      margin-left: 250px; /* Match the sidebar width */
+      flex: 1;
+      min-height: 100vh;
+      overflow-y: auto;
+      padding: 15px;
+    }
+
+    /* Update container styles */
+    #container {
+      position: relative;
+      min-height: 100vh;
+      width: 100%;
+    }
+
+    /* Update the sidebar hidden state */
+    #sidebar.hidden {
+      transform: translateX(-100%);
+    }
+
+    #main.expanded {
+      margin-left: 0;
+    }
+
+    h1, h3 {
+      margin: 0;
+    }
+
+    p {
+      margin: 5px 0 10px;
+    }
+
+    #dropZone {
+      margin: 10px 0;
+      padding: 15px;
+      border: 2px dashed var(--border-color);
+      border-radius: 5px;
+      text-align: center;
+      cursor: pointer;
+      background-color: var(--sidebar-bg-color);
+      transition: background-color 0.3s ease, transform 0.2s ease;
+    }
+
+    #dropZone:hover {
+      background-color: var(--button-hover-bg-color);
+      transform: scale(1.05);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 10px;
+    }
+
+    table th, table td {
+      padding: 8px;
+      border: 1px solid var(--border-color);
+      text-align: left;
+    }
+
+    table td {
+      word-wrap: break-word; /* Enable word wrapping */
+      white-space: pre-wrap; /* Preserve whitespace and wrap text */
+      max-width: 200px; /* Set a maximum width for table cells */
+      overflow-wrap: break-word; /* Break words if necessary */
+    }
+
+    table td.editable {
+      cursor: pointer;
+      background-color: #002200;
+      transition: background-color 0.3s ease;
+    }
+
+    table td.editable:hover {
+      background-color: #003300;
+    }
+
+    button {
+      padding: 10px 20px;
+      cursor: pointer;
+      text-align: center;
+      background: var(--button-bg-color);
+      color: var(--text-color);
+      border: none;
+      border-radius: 5px;
+      box-shadow: var(--button-shadow);
+      transition: background 0.3s ease, transform 0.2s ease;
+    }
+
+    button:hover {
+      background: var(--button-hover-bg-color);
+      transform: scale(1.05);
+    }
+
+    button:active {
+      transform: scale(0.95);
+    }
+
+    #toggleSidebarButton {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      z-index: 1000;
+      padding: 10px 15px;
+      border: 1px solid var(--border-color);
+      border-radius: 5px;
+      box-shadow: var(--button-shadow);
+      background: var(--button-bg-color);
+      color: var(--text-color);
+      cursor: pointer;
+      transition: background 0.3s ease, transform 0.2s ease;
+    }
+
+    #toggleSidebarButton:hover {
+      background: var(--button-hover-bg-color);
+      transform: scale(1.05);
+    }
+
+    #toggleSidebarButton:active {
+      transform: scale(0.95);
+    }
+
+    .theme-dropdown {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+    }
+
+    .theme-dropdown button {
+      padding: 10px 15px;
+      border: 1px solid var(--border-color);
+      border-radius: 5px;
+      box-shadow: var(--button-shadow);
+      background: var(--button-bg-color);
+      color: var(--text-color);
+      cursor: pointer;
+      transition: background 0.3s ease, transform 0.2s ease;
+    }
+
+    .theme-dropdown button:hover {
+      background: var(--button-hover-bg-color);
+      transform: scale(1.05);
+    }
+
+    .theme-dropdown button:active {
+      transform: scale(0.95);
+    }
+
+    .theme-options {
+      display: none;
+      position: absolute;
+      right: 0;
+      top: 100%;
+      background-color: var(--background-color);
+      border: 1px solid var(--border-color);
+      border-radius: 5px;
+      box-shadow: var(--button-shadow);
+      min-width: 150px;
+    }
+
+    .theme-options div {
+      padding: 10px 20px;
+      cursor: pointer;
+      color: var(--text-color);
+      transition: background-color 0.3s ease;
+    }
+
+    .theme-options div:hover {
+      background-color: var(--button-hover-bg-color);
+    }
+
+    .theme-dropdown:hover .theme-options {
+      display: block;
+    }
+
+    #mapContainer {
+      margin-top: 10px;
+      padding: 10px;
+      background-color: var(--sidebar-bg-color);
+      border: 1px solid var(--border-color);
+      border-radius: 5px;
+      box-shadow: var(--button-shadow);
+    }
+
+    #map {
+      height: 300px;
+      border: 1px solid var(--border-color);
+      border-radius: 5px;
+    }
+
+    /* Add styles for OSINT buttons */
+    #osintTools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 15px 0;
+      padding: 15px;
+      background-color: var(--sidebar-bg-color);
+      border-radius: 5px;
+    }
+
+    #osintTools button {
+      flex: 1;
+      min-width: 150px;
+      padding: 10px 15px;
+    }
+
+    .section-header {
+      padding: 10px;
+      background-color: var(--sidebar-bg-color);
+      border: 1px solid var(--border-color);
+      border-radius: 5px;
+      margin-top: 15px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    .section-header:hover {
+      background-color: var(--button-hover-bg-color);
+    }
+
+    .section-header h3 {
+      margin: 0;
+      display: flex;
+      align-items: center;
+    }
+
+    .section-content {
+      padding: 15px;
+      border: 1px solid var(--border-color);
+      border-top: none;
+      border-radius: 0 0 5px 5px;
+      display: none;
+    }
+
+    .section-content.active {
+      display: block;
+    }
+
+    /* Add these styles to your existing CSS */
+    .api-form {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      padding: 15px;
+      background: var(--sidebar-bg-color);
+      border-radius: 5px;
+    }
+
+    .api-input {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .api-input input {
+      padding: 8px;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      background: var(--background-color);
+      color: var(--text-color);
+    }
+
+    #historyContainer {
+      margin-top: 15px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 15px;
+    }
+
+    .history-item {
+      padding: 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 5px;
+      cursor: pointer;
+      background: var(--sidebar-bg-color);
+    }
+
+    .history-item img {
+      width: 100%;
+      height: auto;
+      border-radius: 3px;
+    }
+
+    .api-link {
+      display: inline-block;
+      margin-top: 5px;
+      color: var(--text-color);
+      text-decoration: none;
+      font-size: 0.9em;
+      opacity: 0.8;
+      transition: opacity 0.3s ease;
+    }
+
+    .api-link:hover {
+      opacity: 1;
+      text-decoration: underline;
+    }
+
+    .api-link::after {
+      content: ' →';
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .api-link:hover::after {
+      opacity: 1;
+    }
+
+    .api-info {
+      display: block;
+      margin-top: 5px;
+      font-size: 0.8em;
+      color: var(--text-color);
+      opacity: 0.7;
+    }
+
+    .api-info-box {
+      background: var(--background-color);
+      padding: 15px;
+      border-radius: 5px;
+      margin: 10px 0;
+      border: 1px solid var(--border-color);
+    }
+
+    .api-info-box h4 {
+      margin: 0 0 10px 0;
+      color: var(--text-color);
+    }
+
+    .api-info-box p {
+      margin: 5px 0;
+      font-size: 0.9em;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 2000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(5px);
+    }
+
+    .modal-content {
+      background-color: var(--modal-bg);
+      margin: 15% auto;
+      padding: 20px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      width: 80%;
+      max-width: 500px;
+      box-shadow: var(--button-shadow);
+      animation: modalSlideIn 0.3s ease;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .close-modal {
+      background: none;
+      border: none;
+      color: var(--text-color);
+      font-size: 24px;
+      cursor: pointer;
+      padding: 0 5px;
+      transition: transform 0.2s ease;
+    }
+
+    .close-modal:hover {
+      transform: scale(1.2);
+    }
+
+    .modal-body {
+      color: var(--text-color);
+      white-space: pre-line;
+    }
+
+    @keyframes modalSlideIn {
+      from {
+        transform: translateY(-100px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    .ripple {
+        position: absolute;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.3);
+        transform: scale(0);
+        animation: ripple 0.6s linear;
+        pointer-events: none;
+    }
+    
+    @keyframes ripple {
+        to {
+            transform: scale(4);
+            opacity: 0;
+        }
+    }
+  </style>
+</head>
+<body>
+  <button id="toggleSidebarButton">Toggle Sidebar</button>
+  <div class="theme-dropdown">
+    <button id="themeSwitcher">Theme ▼</button>
+    <div class="theme-options">
+      <div data-theme="dark">Matrix Theme</div>
+      <div data-theme="light">Light Theme</div>
+      <div data-theme="cyberpunk">Cyberpunk</div>
+      <div data-theme="hacker">Hacker</div>
+      <div data-theme="dracula">Dracula</div>
+    </div>
+  </div>
+  <div id="container">
+    <!-- Sidebar -->
+    <div id="sidebar">
+      <h3>Uploaded Images</h3>
+      <div id="fileList">No files uploaded yet.</div>
+      <div id="sidebarResizer"></div> <!-- Add resizer handle -->
+    </div>
+
+    <!-- Main Area -->
+    <div id="main">
+      <h1>Integrated EXIF Viewer & Editor</h1>
+      
+      <!-- Upload Section -->
+      <div class="section-header" onclick="toggleSection('uploadSection')">
+        <h3>↓ Image Upload</h3>
+      </div>
+      <div id="uploadSection" class="section-content">
+        <p>Drag and drop an image below or click to upload:</p>
+        <div id="dropZone">Drag and drop an image here or click to upload</div>
+      </div>
+
+      <!-- Metadata Section -->
+      <div class="section-header" onclick="toggleSection('metadataSection')">
+        <h3>↓ EXIF Metadata</h3>
+      </div>
+      <div id="metadataSection" class="section-content">
+        <table id="metadataTable">
+          <thead>
+            <tr>
+              <th>Key</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <button id="saveButton">Save and Download Metadata</button>
+      </div>
+
+      <!-- Map Section -->
+      <div class="section-header" onclick="toggleSection('mapSection')">
+        <h3>↓ Location Data</h3>
+      </div>
+      <div id="mapSection" class="section-content">
+        <div id="mapContainer">
+          <div id="map"></div>
+        </div>
+      </div>
+
+      <!-- OSINT Tools Section -->
+      <div class="section-header" onclick="toggleSection('osintSection')">
+        <h3>↓ OSINT Tools</h3>
+      </div>
+      <div id="osintSection" class="section-content">
+        <div id="osintTools">
+          <button id="reverseImageSearchButton">Reverse Image Search</button>
+          <button id="nearbyPlacesButton">Find Nearby Places</button>
+        </div>
+      </div>
+
+      <!-- Analysis Tools Section -->
+      <div class="section-header" onclick="toggleSection('analysisSection')">
+        <h3>↓ Analysis Tools</h3>
+      </div>
+      <div id="analysisSection" class="section-content">
+        <div id="osintTools">
+          <button id="socialMediaAnalysis">Analyze Social Media Data</button>
+          <button id="generateHash">Generate File Hash</button>
+          <button id="weatherLookup">Historical Weather</button>
+          <button id="screenshotDetect">Detect Screenshot</button>
+          <button id="analyzeFile">File Analysis</button>
+        </div>
+      </div>
+
+      <!-- API Management Section -->
+      <div class="section-header" onclick="toggleSection('apiSection')">
+        <h3>↓ API Management</h3>
+      </div>
+      <div id="apiSection" class="section-content">
+        <div class="api-form">
+          <div class="api-input">
+            <label for="openCageApiKey">OpenCage Geocoding API Key:</label>
+            <input type="text" id="openCageApiKey" placeholder="Enter OpenCage API key">
+            <a href="https://opencagedata.com/users/sign_up" target="_blank" class="api-link">Get Free OpenCage API Key →</a>
+            <small class="api-info">Free tier includes 2,500 requests/day</small>
+          </div>
+          <div class="api-info-box">
+            <h4>API Information:</h4>
+            <p>• Open-Meteo Weather API: No key required - free to use</p>
+            <p>• More info: <a href="https://open-meteo.com/" target="_blank" class="api-link">Open-Meteo Documentation →</a></p>
+          </div>
+          <button id="saveApiKeys">Save API Keys</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="customModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h4>Information</h4>
+        <button class="close-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="modalMessage"></p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const dropZone = document.getElementById('dropZone');
+    const fileList = document.getElementById('fileList');
+    const metadataTable = document.getElementById('metadataTable').querySelector('tbody');
+    const saveButton = document.getElementById('saveButton');
+    const mapContainer = document.getElementById('mapContainer');
+    const sidebar = document.getElementById('sidebar');
+    const toggleSidebarButton = document.getElementById('toggleSidebarButton');
+    const themeSwitcher = document.getElementById('themeSwitcher');
+    const reverseImageSearchButton = document.getElementById('reverseImageSearchButton');
+    const nearbyPlacesButton = document.getElementById('nearbyPlacesButton');
+    const sidebarResizer = document.getElementById('sidebarResizer');
+    let currentMetadata = {};
+    let mapInitialized = false;
+    let map;
+    let isDarkTheme = true;
+    let isResizing = false;
+
+    function toggleSection(sectionId) {
+      const section = document.getElementById(sectionId);
+      section.classList.toggle('active');
+    }
+
+    // Add this function to replace all alerts
+    function showModal(message) {
+        const modal = document.getElementById('customModal');
+        const modalMessage = document.getElementById('modalMessage');
+        modalMessage.textContent = message;
+        modal.style.display = 'block';
+
+        // Close button functionality
+        const closeBtn = modal.querySelector('.close-modal');
+        closeBtn.onclick = () => modal.style.display = 'none';
+
+        // Click outside to close
+        window.onclick = (event) => {
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        };
+
+        // Press Escape to close
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                modal.style.display = 'none';
+            }
+        });
+    }
+
+    // Handle Drag-and-Drop
+    dropZone.addEventListener('dragover', event => {
+      event.preventDefault();
+      dropZone.classList.add('dragging');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('dragging');
+    });
+
+    dropZone.addEventListener('drop', event => {
+      event.preventDefault();
+      dropZone.classList.remove('dragging');
+      const file = event.dataTransfer.files[0];
+      if (!file) {
+        showModal('No file selected!');
+        return;
+      }
+      handleFile(file);
+    });
+
+    dropZone.addEventListener('click', () => {
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = 'image/*';
+      fileInput.addEventListener('change', event => {
+        const file = event.target.files[0];
+        handleFile(file);
+      });
+      fileInput.click();
+    });
+
+    function handleFile(file) {
+      if (!file.type.startsWith('image/')) {
+        showModal('Please upload a valid image file.');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = event => {
+        const img = new Image();
+        img.src = URL.createObjectURL(file);
+        dropZone.innerHTML = ''; // Clear the dropzone
+        dropZone.appendChild(img); // Display the image
+
+        img.onload = () => {
+          EXIF.getData(img, function () {
+            currentMetadata = EXIF.getAllTags(this);
+            displayMetadata(currentMetadata);
+            addFileToList(file.name);
+            // Add to history after metadata is extracted
+            historyManager.addImage(event.target.result);
+          });
+        };
+      };
+
+      reader.readAsDataURL(file);
+    }
+
+    function displayMetadata(metadata) {
+      metadataTable.innerHTML = '';
+      for (const [key, value] of Object.entries(metadata)) {
+        const row = document.createElement('tr');
+        const keyCell = document.createElement('td');
+        const valueCell = document.createElement('td');
+        keyCell.textContent = key;
+        valueCell.textContent = value;
+        valueCell.classList.add('editable');
+        valueCell.addEventListener('click', () => editMetadataValue(key, valueCell));
+        row.appendChild(keyCell);
+        row.appendChild(valueCell);
+        metadataTable.appendChild(row);
+      }
+
+      // If GPS data is available, show it on the map
+      if (metadata.GPSLatitude && metadata.GPSLongitude) {
+        showMap(metadata.GPSLatitude, metadata.GPSLongitude, metadata.GPSLatitudeRef, metadata.GPSLongitudeRef);
+      }
+    }
+
+    function addFileToList(fileName) {
+      const fileItem = document.createElement('div');
+      fileItem.textContent = fileName;
+      fileItem.className = 'file-item';
+      fileList.appendChild(fileItem);
+      fileItem.addEventListener('click', () => {
+        showModal(`Selected file: ${fileName}`);
+      });
+    }
+
+    function editMetadataValue(key, cell) {
+      const oldValue = cell.textContent;
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = oldValue;
+      input.style.width = '100%';
+      input.addEventListener('blur', () => {
+        const newValue = input.value;
+        cell.textContent = newValue;
+        currentMetadata[key] = newValue;
+
+        // Update the map if GPS data is edited
+        if (key === 'GPSLatitude' || key === 'GPSLongitude' || key === 'GPSLatitudeRef' || key === 'GPSLongitudeRef') {
+          const { GPSLatitude, GPSLongitude, GPSLatitudeRef, GPSLongitudeRef } = currentMetadata;
+          if (GPSLatitude && GPSLongitude) {
+            showMap(GPSLatitude, GPSLongitude, GPSLatitudeRef, GPSLongitudeRef);
+          }
+        }
+      });
+      cell.textContent = '';
+      cell.appendChild(input);
+      input.focus();
+    }
+
+    function showMap(lat, lng, latRef, lngRef) {
+      if (!mapInitialized) {
+        map = L.map('map').setView([0, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+        mapInitialized = true;
+      }
+
+      const latitude = convertToDecimal(lat, latRef);
+      const longitude = convertToDecimal(lng, lngRef);
+      map.setView([latitude, longitude], 13);
+      L.marker([latitude, longitude]).addTo(map).bindPopup('Image Location').openPopup();
+    }
+
+    function convertToDecimal(coord, ref) {
+      const [degrees, minutes, seconds] = coord;
+      let decimal = degrees + minutes / 60 + seconds / 3600;
+      if (ref === 'S' || ref === 'W') decimal *= -1;
+      return decimal;
+    }
+
+    saveButton.addEventListener('click', () => {
+      const blob = new Blob([JSON.stringify(currentMetadata, null, 2)], { type: 'application/json' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'edited_metadata.json';
+      link.click();
+    });
+
+    // Toggle Sidebar
+    toggleSidebarButton.addEventListener('click', () => {
+      sidebar.classList.toggle('hidden');
+      const main = document.getElementById('main');
+      main.classList.toggle('expanded');
+      
+      // Update margins
+      if (sidebar.classList.contains('hidden')) {
+        main.style.marginLeft = '0';
+      } else {
+        main.style.marginLeft = sidebar.style.width || '250px';
+      }
+    });
+
+    // Replace the existing theme switcher code
+    document.addEventListener('DOMContentLoaded', () => {
+        const themeOptions = document.querySelectorAll('.theme-options div');
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        
+        // Apply saved theme on load
+        document.body.className = `${savedTheme}-theme`;
+        
+        themeOptions.forEach(option => {
+            // Wrap text content in span for overlay effect
+            const text = option.textContent;
+            option.innerHTML = `<span>${text}</span>`;
+            
+            option.addEventListener('click', (e) => {
+                e.preventDefault();
+                const theme = option.getAttribute('data-theme');
+                
+                // Remove previous theme
+                document.body.classList.forEach(className => {
+                    if (className.endsWith('-theme')) {
+                        document.body.classList.remove(className);
+                    }
+                });
+                
+                // Add new theme
+                document.body.classList.add(`${theme}-theme`);
+                localStorage.setItem('theme', theme);
+                
+                // Add click effect
+                const ripple = document.createElement('div');
+                ripple.classList.add('ripple');
+                option.appendChild(ripple);
+                
+                // Remove ripple after animation
+                setTimeout(() => {
+                    ripple.remove();
+                }, 1000);
+            });
+        });
+    });
+
+    // Reverse Image Search
+    function performReverseImageSearch(imgElement) {
+        try {
+            // Open Google Images in a new tab
+            const googleImagesUrl = 'https://www.google.com/imghp';
+            const newTab = window.open(googleImagesUrl, '_blank');
+            
+            // Show instructions to the user
+            showModal('1. Right-click the image in the EXIF viewer\n' +
+                  '2. Select "Copy image"\n' +
+                  '3. In the new Google Images tab, click the camera icon\n' +
+                  '4. Paste the image to search');
+            
+        } catch (error) {
+            showModal('Error opening reverse image search: ' + error.message);
+        }
+    }
+
+    document.getElementById('reverseImageSearchButton').addEventListener('click', () => {
+        const imgElement = document.querySelector('#dropZone img');
+        if (!imgElement) {
+            showModal('Please upload an image first.');
+            return;
+        }
+        performReverseImageSearch(imgElement);
+    });
+
+    // Nearby Places Lookup
+    nearbyPlacesButton.addEventListener('click', () => {
+      if (currentMetadata.GPSLatitude && currentMetadata.GPSLongitude) {
+        const latitude = convertToDecimal(currentMetadata.GPSLatitude, currentMetadata.GPSLatitudeRef);
+        const longitude = convertToDecimal(currentMetadata.GPSLongitude, currentMetadata.GPSLongitudeRef);
+        const nearbyPlacesUrl = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+        window.open(nearbyPlacesUrl, '_blank');
+      } else {
+        showModal('No GPS data available in the image metadata.');
+      }
+    });
+
+    // Sidebar Resizer
+    sidebarResizer.addEventListener('mousedown', (e) => {
+      isResizing = true;
+      document.body.style.cursor = 'ew-resize';
+      document.addEventListener('mousemove', resizeSidebar);
+      document.addEventListener('mouseup', stopResizing);
+    });
+
+    function resizeSidebar(e) {
+      if (!isResizing) return;
+
+      const newWidth = e.clientX;
+      if (newWidth > 100 && newWidth < 500) {
+        sidebar.style.width = `${newWidth}px`;
+        document.getElementById('main').style.marginLeft = `${newWidth}px`;
+      }
+    }
+
+    function stopResizing() {
+      isResizing = false;
+      document.body.style.cursor = 'default';
+      document.removeEventListener('mousemove', resizeSidebar);
+      document.removeEventListener('mouseup', stopResizing);
+    }
+
+    // Social Media Analysis
+    function analyzeSocialMedia(metadata) {
+      const socialData = {
+        platform: metadata.Software || 'Unknown',
+        deviceMake: metadata.Make || 'Unknown',
+        deviceModel: metadata.Model || 'Unknown',
+        edited: metadata.Software?.includes('Photoshop') || false
+      };
+      
+      showModal(`Social Media Analysis:
+        Platform: ${socialData.platform}
+        Device: ${socialData.deviceMake} ${socialData.deviceModel}
+        Edited: ${socialData.edited}`);
+    }
+
+    // Generate File Hash
+    async function generateFileHash(file) {
+      try {
+        const buffer = await file.arrayBuffer();
+        const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        showModal(`File Hash (SHA-256):\n${hashHex}`);
+      } catch (error) {
+        showModal('Error generating hash: ' + error.message);
+      }
+    }
+
+    // Weather Data Lookup
+    async function lookupWeather(metadata) {
+      if (!metadata.GPSLatitude || !metadata.GPSLongitude) {
+        showModal('No GPS data available in the image metadata.');
+        return;
+      }
+
+      const lat = convertToDecimal(metadata.GPSLatitude, metadata.GPSLatitudeRef);
+      const lon = convertToDecimal(metadata.GPSLongitude, metadata.GPSLongitudeRef);
+      
+      // Get the date from metadata if available
+      let dateStr = '';
+      if (metadata.DateTimeOriginal) {
+          dateStr = metadata.DateTimeOriginal.split(' ')[0].replace(/:/g, '-');
+      }
+
+      try {
+          // Construct the URL with specific coordinates and date
+          const url = `https://archive-api.open-meteo.com/v1/archive?` +
+              `latitude=${lat}&` +
+              `longitude=${lon}&` +
+              `start_date=${dateStr}&` +
+              `end_date=${dateStr}&` +
+              `daily=temperature_2m_max,temperature_2m_min,precipitation_sum,sunrise,sunset&` +
+              `timezone=auto`;
+
+          const response = await fetch(url);
+          if (!response.ok) throw new Error('Weather API request failed');
+          
+          const data = await response.json();
+          
+          // Format the weather data
+          const weather = data.daily;
+          const report = `Weather Data for Image Location:
+              Date: ${dateStr}
+              Max Temperature: ${weather.temperature_2m_max[0]}°C
+              Min Temperature: ${weather.temperature_2m_min[0]}°C
+              Precipitation: ${weather.precipitation_sum[0]}mm
+              Sunrise: ${weather.sunrise[0]}
+              Sunset: ${weather.sunset[0]}
+              Location: ${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+
+          showModal(report);
+      } catch (error) {
+          showModal('Error fetching weather data: ' + error.message);
+      }
+    }
+
+    // Screenshot Detection
+    function detectScreenshot(metadata) {
+      const screenshotIndicators = [
+        metadata.Software?.includes('Screenshot'),
+        metadata.Creator?.includes('Screen'),
+        !metadata.Make && !metadata.Model,
+        metadata.FileSource === 'Screenshot'
+      ];
+      
+      const isScreenshot = screenshotIndicators.some(indicator => indicator);
+      return isScreenshot;
+    }
+
+    // File Analysis Summary
+    function generateAnalysisSummary(metadata, fileHash) {
+      const summary = {
+        fileType: metadata.MIMEType || 'Unknown',
+        created: metadata.CreateDate || 'Unknown',
+        modified: metadata.ModifyDate || 'Unknown',
+        software: metadata.Software || 'Unknown',
+        deviceInfo: `${metadata.Make || 'Unknown'} ${metadata.Model || ''}`,
+        hash: fileHash,
+        isScreenshot: detectScreenshot(metadata)
+      };
+      
+      return summary;
+    }
+
+    // File Analysis Function
+    function analyzeFile(metadata) {
+      const analysis = {
+        fileType: metadata.MIMEType || 'Unknown',
+        software: metadata.Software || 'Unknown',
+        device: `${metadata.Make || 'Unknown'} ${metadata.Model || ''}`,
+        created: metadata.CreateDate || 'Unknown',
+        modified: metadata.ModifyDate || 'Unknown',
+        gpsPresent: !!(metadata.GPSLatitude && metadata.GPSLongitude),
+        resolution: `${metadata.ImageWidth || '?'}x${metadata.ImageHeight || '?'}`,
+        orientation: metadata.Orientation || 'Unknown'
+      };
+
+      const report = `File Analysis Report:
+      File Type: ${analysis.fileType}
+      Software: ${analysis.software}
+      Device: ${analysis.device}
+      Created: ${analysis.created}
+      Modified: ${analysis.modified}
+      GPS Data Present: ${analysis.gpsPresent}
+      Resolution: ${analysis.resolution}
+      Orientation: ${analysis.orientation}`;
+
+      showModal(report);
+    }
+
+    function lookupLocation(lat, lon) {
+      const apiKey = apiManager.keys.geocodingApi;
+      if (!apiKey) {
+        showModal('Please enter your OpenCage API key in the API Management section');
+        return;
+      }
+
+      const url = `https://api.opencagedata.com/geocode/v1/json?q=${lat}+${lon}&key=${apiKey}`;
+      
+      fetch(url)
+        .then(response => response.json())
+        .then(data => {
+          if (data.results && data.results.length > 0) {
+            const location = data.results[0].formatted;
+            showModal(`Location: ${location}`);
+          } else {
+            showModal('No location data found');
+          }
+        })
+        .catch(error => showModal('Error looking up location: ' + error.message));
+    }
+
+    // Add Event Listeners
+    document.getElementById('socialMediaAnalysis').addEventListener('click', () => {
+      if (currentMetadata) {
+        analyzeSocialMedia(currentMetadata);
+      }
+    });
+
+    document.getElementById('generateHash').addEventListener('click', () => {
+      const imgElement = document.querySelector('#dropZone img');
+      if (!imgElement) {
+        showModal('Please upload an image first.');
+        return;
+      }
+      
+      fetch(imgElement.src)
+        .then(response => response.blob())
+        .then(blob => generateFileHash(blob))
+        .catch(error => showModal('Error generating hash: ' + error.message));
+    });
+
+    document.getElementById('weatherLookup').addEventListener('click', () => {
+      if (currentMetadata) {
+        lookupWeather(currentMetadata);
+      } else {
+        showModal('Please upload an image first.');
+      }
+    });
+
+    document.getElementById('screenshotDetect').addEventListener('click', () => {
+      if (currentMetadata) {
+        const isScreenshot = detectScreenshot(currentMetadata);
+        showModal(`Screenshot Detection: ${isScreenshot ? 'This appears to be a screenshot' : 'This appears to be a camera photo'}`);
+      }
+    });
+
+    document.getElementById('analyzeFile').addEventListener('click', () => {
+      if (currentMetadata) {
+        analyzeFile(currentMetadata);
+      } else {
+        showModal('Please upload an image first.');
+      }
+    });
+
+    // Add this to your existing window.onload or at the end of your script
+    document.addEventListener('DOMContentLoaded', () => {
+      // Show upload section by default
+      document.getElementById('uploadSection').classList.add('active');
+      
+      // Initialize all section arrows
+      document.querySelectorAll('.section-header h3').forEach(header => {
+        const sectionId = header.parentElement.nextElementSibling.id;
+        header.textContent = `${sectionId === 'uploadSection' ? '↑' : '↓'} ${header.textContent}`;
+      });
+    });
+
+    // Add these functions to your existing JavaScript
+
+    // Cookie management
+    const cookieManager = {
+        set: function(name, value, days) {
+            const expires = new Date();
+            expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000);
+            document.cookie = `${name}=${JSON.stringify(value)};expires=${expires.toUTCString()};path=/`;
+        },
+        
+        get: function(name) {
+            const nameEQ = `${name}=`;
+            const cookies = document.cookie.split(';');
+            for(let cookie of cookies) {
+                cookie = cookie.trim();
+                if (cookie.indexOf(nameEQ) === 0) {
+                    return JSON.parse(cookie.substring(nameEQ.length));
+                }
+            }
+            return null;
+        },
+        
+        delete: function(name) {
+            document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:01 GMT;path=/`;
+        }
+    };
+
+    // API management
+    const apiManager = {
+        keys: {},
+        
+        init: function() {
+            // Load saved API keys
+            const savedKeys = cookieManager.get('apiKeys');
+            if (savedKeys) {
+                this.keys = savedKeys;
+                document.getElementById('openCageApiKey').value = savedKeys.openCageApi || '';
+            }
+            
+            // Set up event listeners
+            document.getElementById('saveApiKeys').addEventListener('click', () => this.saveApiKeys());
+        },
+        
+        saveApiKeys: function() {
+            const openCageKey = document.getElementById('openCageApiKey').value.trim();
+            
+            this.keys = {
+                openCageApi: openCageKey
+            };
+            
+            cookieManager.set('apiKeys', this.keys, 30); // Save for 30 days
+            showModal('API key saved successfully!');
+        }
+    };
+
+    // Image history management
+    const historyManager = {
+        maxImages: 10,
+        
+        addImage: function(imageData) {
+            let history = cookieManager.get('imageHistory') || [];
+            history.unshift({
+                data: imageData,
+                timestamp: Date.now(),
+                metadata: currentMetadata
+            });
+            
+            // Keep only the last N images
+            history = history.slice(0, this.maxImages);
+            cookieManager.set('imageHistory', history, 30);
+            this.displayHistory();
+        },
+        
+        displayHistory: function() {
+            const history = cookieManager.get('imageHistory') || [];
+            const container = document.getElementById('historyContainer');
+            if (!container) return;
+            
+            container.innerHTML = '';
+            history.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'history-item';
+                div.innerHTML = `
+                    <img src="${item.data}" alt="Historical image ${index + 1}">
+                    <div class="history-date">${new Date(item.timestamp).toLocaleDateString()}</div>
+                `;
+                div.addEventListener('click', () => this.loadHistoricalImage(item));
+                container.appendChild(div);
+            });
+        },
+        
+        loadHistoricalImage: function(item) {
+            currentMetadata = item.metadata;
+            displayMetadata(currentMetadata);
+            const img = document.createElement('img');
+            img.src = item.data;
+            dropZone.innerHTML = '';
+            dropZone.appendChild(img);
+        }
+    };
+
+    // Initialize when the page loads
+    document.addEventListener('DOMContentLoaded', () => {
+        apiManager.init();
+    });
+  </script>
+</body>
+</html>
